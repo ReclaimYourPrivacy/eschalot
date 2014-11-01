@@ -1,0 +1,429 @@
+About:
+------
+
+Eschalot is a TOR hidden service name generator, it allows one to produce
+a (partially) customized vanity .onion address using a brute-force method.
+
+See http://torproject.org for more information about the TOR network
+and http://torproject.org/docs/hidden-services for the hidden services
+documentation.
+
+Why eschalot? Well, eschalot is a different name for shallot and it is
+a fork of an older .onion names generator called shallot.
+
+See http://github.com/katmagic/Shallot for information about the shallot
+and also see the History section at the end of this document.
+
+Eschalot is distributed in source form under BSD license. It should compile
+on any Unix or Linux system, but might need some minor modifications.
+
+It was developed and most extensively tested on OpenBSD, but was also tested
+to compile and run on DragonFlyBSD, FreeBSD, CentOS Linux, and couple other
+mainstream Linux distributions whose names I do not recall at the moment.
+Various combinations of big/little endian platforms, 32bit/64bit platforms,
+and gcc/pcc/llvm/clang static analizer were tested. Many bugs were uncovered,
+some were fixed, some are still there - see TODO list if interested.
+
+
+
+Compilation:
+------------
+
+Eschalot requires OpenSSL-0.9.7-or-later libraries with source headers.
+
+You will also need a make utility (either BSD or GNU make will do) and
+a C compiler (gcc, pcc, or llvm/clang).
+
+Download the latest version of eschalot (currently eschalot-1.2.0), open a
+terminal emulator, such as xterm, and change directory to where you saved
+the eschalot-1.2.0.tar.gz archive (for examle /home/username/Download);
+
+	$ cd Download
+	$ tar xzvf eschalot-1.2.0.tar.gz
+	$ cd eschalot-1.2.0
+	$ make
+
+To use a different (other than your system default) C compiler (such as pcc):
+
+	$ make clean
+	$ env CC=pcc make
+
+If compilation fails, see some hints below under "Compilation Troubleshooting"
+close to the end of this document.
+
+If make succeeds, you might want to run a simple functionality test/demo with
+
+	$ make test
+
+This will use the included worgen utility to create a test wordlist out of the
+three small wordlists included with the distribution, will save the list to
+'wordlist.txt', and will launch eschalot running with 4 threads to start
+looking for the onion names with the prefixes in the wordlist.txt file.
+The results will be redirected to the 'results.txt' file. This test needs
+a fairly fast machine with at least 250Mb of RAM.
+
+To remove the test files execute
+
+	$ make cleantest
+
+To remove the compiled binaries execute
+
+	$ make clean
+
+To cleanup everything execute
+
+	$ make cleanall
+
+
+
+Example output from 'make test':
+--------------------------------
+
+$ make test
+cc -std=c99 -O2 -fPIC -finline-functions -Wall -W -Wunused -pedantic -Wpointer-arith  -Wreturn-type -Wstrict-prototypes  -Wmissing-prototypes -Wshadow -Wcast-qual -Wextra -o eschalot eschalot.c -lpthread -lssl -lcrypto
+cc -std=c99 -O2 -fPIC -finline-functions -Wall -W -Wunused -pedantic -Wpointer-arith  -Wreturn-type -Wstrict-prototypes  -Wmissing-prototypes -Wshadow -Wcast-qual -Wextra -o worgen worgen.c
+
+./worgen 8-16 top150adjectives.txt 3-16 top400nouns.txt 3-16 top1000.txt 3-16 > wordlist.txt
+Will be producing 8-16 character long word combinations.
+Reading 3-16 characters words from top150adjectives.txt.
+Reading 3-16 characters words from top400nouns.txt.
+Reading 3-16 characters words from top1000.txt.
+Loading words from top150adjectives.txt.
+Loaded 150 words from top150adjectives.txt.
+Loading words from top400nouns.txt.
+Loaded 400 words from top400nouns.txt.
+Loading words from top1000.txt.
+Loaded 974 words from top1000.txt.
+Working. 100% complete, 31122412 words (approximately 377Mb) produced.
+Final count: 31366539 word combinations.
+
+./eschalot -vct4 -f wordlist.txt > results.txt
+Verbose, continuous, no digits, 4 threads, prefixes 8-16 characters long.
+Reading words from wordlist.txt, please wait...
+Loaded 31366539 words.
+Sorting the word hashes and removing duplicates.
+Final word count: 31363570.
+Thread #1 started.
+Thread #2 started.
+Thread #3 started.
+Thread #4 started.
+Running, collecting performance data...
+Found a key for acidfall (8) - acidfalleyt3kkva.onion
+Total hashes: 131241356, running time: 10 seconds, hashes per second: 13124135
+Found a key for redglass (8) - redglass6i2pxool.onion
+Found a key for loudwalk (8) - loudwalk72kvhr4n.onion
+Found a key for illarteye (9) - illarteyedjxf3pj.onion
+Total hashes: 394606458, running time: 30 seconds, hashes per second: 13153548
+Found a key for cutcolor (8) - cutcolorxqxz7ck4.onion
+Found a key for safefold (8) - safefold7hmcigr7.onion
+Found a key for tallidea (8) - tallideac5zyn3f7.onion
+Found a key for wetactago (9) - wetactagot7b42kx.onion
+Found a key for pooryear (8) - pooryearxutsizhe.onion
+^C*** Signal SIGINT in eschalot-1.2.0 (test)
+
+
+
+Usage:
+------
+
+Type
+	$ ./eschalot
+and
+	$ ./worgen
+
+without any options to get a quick usage information.
+
+
+To search using 4 threads (if your CPU has 4 cores), in a verbose mode,
+continuing to search after an .onion address is found, looking for a single
+prefix "test":
+
+	$ ./eschalot -t4 -v -c -p test
+
+or simply
+
+	$ ./eschalot -vct4 -p test
+
+To search using a regular expression looking for names starting with "test"
+or ending with "exam":
+
+	$ ./eschalot -vct4 -r "^test|exam$"
+
+To search for a single prefix "hello" using one thread, redirecting the
+output to a file named "results.txt", exiting after the first name is found:
+
+	$ ./eschalot -p hello >> results.txt
+
+To search for prefixes from 8 to 10 characters long from a file named
+"wordlist.txt" using 6 threads, in continuous and verbose mode,
+redirecting the results to a file:
+
+	$ ./eschalot -vct6 -l8-10 -f wordlist.txt >> results.txt
+
+
+
+Generating a wordlist:
+----------------------
+
+You can use the included utility "worgen" to generate large wordlists for
+eschalot. This utility is far from complete and is not very user friendly,
+but can be used if needed. To demonstrate by example:
+
+Generate a (relatively small) list of 8 to 12 character long words by
+mixing 3-10 character words from top1000.txt file, 3-6 character words
+from top400nouns.txt, and 3-6 character words from top140adjectives.txt,
+redirect the results to wordlist.txt:
+
+	$ ./worgen 8-12 top1000.txt 3-10 top400nouns.txt \
+	  3-6 top150adjectives.txt 3-6 > wordlist.txt
+
+
+Generate a large (~1.2Gb) file of 10 character long words by mixing twice
+words from a single file:
+
+	$ ./worgen 10-10 nouns.txt 3-10 nouns.txt 3-10 > wordlist.txt
+
+At this point you might want to try running
+
+	$ ./eschalot -vct6 -l 10-10 -f wordlist.txt > results.txt
+
+to test if your system can load a large file into memory.
+
+The result should look something like this:
+
+$ ./eschalot -vct6 -l 10-10 -f wordlist.txt > results.txt 
+Verbose, continuous, no digits, 6 threads, prefixes 10-10 characters long.
+Reading words from wordlist.txt, please wait...
+Loaded 110792061 words.
+Sorting the word hashes and removing duplicates.
+Final word count: 110558812.
+Thread #1 started.
+Thread #2 started.
+Thread #3 started.
+Thread #4 started.
+Thread #5 started.
+Thread #6 started.
+Running, collecting performance data...
+Found a key for museumazof (10) - museumazofgsihx2.onion
+Found a key for balzacnick (10) - balzacnickaxtbd4.onion
+Found a key for methodmoor (10) - methodmooraudcft.onion
+Found a key for gneissbutt (10) - gneissbuttieicps.onion
+Found a key for todcorypha (10) - todcoryphadr7zv4.onion
+Found a key for pleveniyar (10) - pleveniyarpa3hlx.onion
+Found a key for caputwight (10) - caputwightz46r3n.onion
+Found a key for mervensalp (10) - mervensalpskbwad.onion
+Found a key for hallelenid (10) - hallelenidmhln6o.onion
+Found a key for quotalysis (10) - quotalysisadbc57.onion
+Found a key for longabarth (10) - longabarthvvdjpw.onion
+Found a key for vannlozier (10) - vannlozierwqadcv.onion
+Found a key for uriahcadre (10) - uriahcadreac7ujz.onion
+Found a key for denmarkjew (10) - denmarkjewfyozqj.onion
+Found a key for kochiiclod (10) - kochiiclodifftuw.onion
+Found a key for fondusamba (10) - fondusambaialjro.onion
+^C
+
+As you see, it finds a lot of prefixes in just a few seconds, but most of them
+are useless - that's the downside of using a really large wordlist with either
+junk or extremely uncommon words combinations in it. Experiment with it! :)
+
+
+
+Security of generated keys:
+---------------------------
+
+Original note from Shallot:
+
+It is sometimes claimed that private keys generated by Shallot are less
+secure than those generated by Tor. This is false. Although Shallot generates
+a keypair with an unusually large public exponent e, it performs all of the
+sanity checks specified by PKCS #1 v2.1 (directly in sane_key), and then
+performs all of the sanity checks that Tor does when it generates an RSA
+keypair (by calling the OpenSSL function RSA_check_key).
+
+
+Eschalot additions:
+
+Now the public exponent is limited to the range of 
+(0xFFFFFF + 2) to (0xFFFFFFFF) - basically, odd values that take at least,
+and no more than, 4 bytes.
+
+In addition, unlike shallot, after the RSA key has been finalized, the
+.onion name is regenerated using the same procedure as used in the official
+TOR client - this filters out the occasional bogus .onions that shallot
+generated occasionally (and eschalot does too - this is a bug I have not
+tracked down yet).
+
+Now, there is nothing stopping the TOR developers from modifying the TOR
+client to only accept manually imported keys with public exponent equal,
+lets say, 65537 and nothing else, but that would be silly of them. It would
+not improve TOR's performance much or serve any other purpose, but to
+knock offline several well established hidden websites that have been using
+shallot-generated keys for years. I would not worry about it.
+
+
+
+Performance:
+------------
+
+Depends on how fast your CPU is and how many cores you have, but generally
+speaking it's a bit faster than shallot. Up to twice as fast in some cases,
+but it depends greatly on how fast the OpenSSL's SHA1 implementation is on
+the system. Some use hand-optimized assembly, some use C versions.
+
+Wordlist mode is obviously slower than a single fixed prefix mode, but not
+by much. The difference between searching in a 100 words list and a 100 million
+words list is negligible due to the binary search and hashed tree data
+storage. Of course, that is if the whole wordlist fits in RAM completely.
+
+Memory needed is approximately 0.5-0.7 of the size of the wordlist size
+on disk (yes, eschalot needs less memory than the file takes due to the words
+getting converted into binary format and stored in a sort of a hashed tree).
+
+
+
+Compilation Troubleshooting:
+----------------------------
+
+1). Does the error message you are getting give you any hints?
+
+
+2). If the error message complains that make/gmake/gcc/cc cannot be found,
+you will need to install the make/gmake utility and gcc or some other C
+compiler. Some of the Linuxes split the gcc package into several smaller ones
+- you will need the one that says "GNU C Compiler" or something like that.
+
+Note: most of the mainstream Linuxes do not come with a compiler by default
+theese days even if you choose a complete - often 5-10Gb - installation.  
+(Yeah, that was a shock for me too), but it's fairly easy to install it by
+using your operating system's software manager.
+
+
+3). If it says something like "SHA1*** / RSA*** /BN_*** function not defined"
+or "missing <openssl/***.h> header", you will need to make sure you not
+only have the dynamic OpenSSL libraries installed, but also the header files.
+On Linuxes, they are sometimes distributed in a different package from the
+main OpenSSL and are called something like "OpenSSL-development" or
+"OpenSSL-sources-and-headers" or something like that - look around.
+
+
+4). If you get an error message about 'htobe32' function not being defined,
+you can try using a locally-supplied copy by compiling with
+
+	$ env CFLAGS=-DNEED_HTOBE32 make
+
+Same if your system does not have strnlen - try
+
+	$ env CFLAGS=-DNEED_STRNLEN make
+
+Or might even have to define both like this:
+
+	$ env CFLAGS="-DNEED_HTOBE32 -DNEED_STRNLEN" make
+
+
+5). If all of the above fails, take a look inside the Makefile, and see if
+you need to disable or enable some additional C flags.
+
+
+6). If your error message says something about endian.h, take a look at the
+beginning of the eschalot.c file, see how that file is being included.
+You might need to adjust it a bit (that part needs work - see TODO list).
+
+
+7). If all else fails, send me an email or post something on the feedback
+forum. I'll be happy to hear any feedback, positive or negative, and will try
+to help.
+
+
+
+Bugs and ToDo list:
+-------------------
+
+0). Highest priority bug:
+Every so often, while searching in a wordlist mode, eschalot finds the
+right prefix, but then, after finalizing the key and regenerating the .onion
+name, the result is garbage. I suspected my CPU or RAM overheating at first,
+but now I tend to think it's a bug in the program (or OpenSSL) somewhere.
+It gets detected and rejected and a message is printed on STDERR, but it's
+a big waste of hash cycles. Have to track it down.
+
+1). worgen dumps core on 32-bit OpenBSD when using fairly large input
+wordlists (triggers stack smash protection). Works fine on 64-bit systems.
+
+2). I tried to optimize the main loop somewhat, but the wordlist loading
+could use some improvement - realloc'ing 8 bytes at a time is slow (was
+concerned about total memory used when loading large files when I did it).
+
+3). Need better statistics with estimated time needed predictions.
+
+4). Half the variables are global - does not hurt in this case, but is ugly.
+
+5). Print out the public exponent used when a key is found.
+
+6). Write a manpage.
+
+7). Optimize and improve the worgen utility, it was a quick hack.
+
+8). More testing on different OSes, finalize the htobe32/strnlen defines mess.
+
+9). Attempt to implement a GPU hashing mode for Linux.
+
+10). Add a local SHA1 function written in assembly for sparc/sparc64.
+
+11). Make it compile on windows and provide windows binary.
+
+12). Go over the numerous TODOs in the code and address them.
+
+13). Generate one ultimate wordlist with good word combinations 8-16 chars
+long, about 5-10Gb in size total, so it could be used to search for a
+specific lengths even if the whole thing cannot fit in RAM at once. Perhaps
+grab all the phrases and word combinations from a few hundred ebooks
+instead of generating randomly mixed rubbish?
+
+14). Move the defines, includes, and functions shared between eschalot and
+worgen into "common.h/common.c" files.
+
+15). Add a real self-test with fixed initial RSA key, compare a few hundred
+generated .onion names to a known good file. Or something like that.
+Make it all driven through the Makefile to simplify testing on different
+platforms.
+
+
+History:
+--------
+
+Circa 2006, a person with a nickname Cowboy Bebop created the original
+onionhash-0.0.1, which evolved into onionhash-0.0.2 and 0.0.3, until Bebop
+and his home at torlandypjxiligx.onion mysteriously vanished.
+
+At this point, it was picked up by someone called Orum, who renamed the
+onionhash to shallot and went through three versions until Orum's site at
+hangman5naigg7rr.onion disappeared.
+
+Another concerned OnionLand citizen Katmagic got shallot's sources from
+taswebqlseworuhc.onion and put them into a Git repository. Made a few
+modifications, wrote a new README, and put the whole thing up on GitHub.
+
+I stumbled on the project at some point and had a few ideas on how to make
+it more flexible. However, the changes I planned to make were too extensive
+to consider simply patching shallot, so I decided to fork it and work on
+it for my own private use. After messing with it (very) occasionally for
+couple of months, I figured it might be of use to some other TOR enthusiasts,
+even though I would not call my remake of shallot "production ready".
+
+Initially I named my project "scallion", however, just a few days ago, I have
+learned of yet another .onion names generator recently released which was,
+unsurprisingly, named scallion, so I renamed my project to "eschalot".
+
+See http://github.com/lachesis/scallion for more details on scallion.
+
+It's all about choices and now you have several!
+
+P.S. Following the tradition set forth by the previous authors, I will
+remain anonymous for the time being.
+
+P.P.S. Sending my greetings and thanks to all the people who worked on this
+project before me and kept it alive over the years!
+
+--Unperson Hiro
+19 February 2013
+
