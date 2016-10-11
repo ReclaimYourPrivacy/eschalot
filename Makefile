@@ -58,7 +58,7 @@ RESULTS		= results.txt
 
 test:		all
 		./${PROG2} 8-16 ${WF1} 3-16 ${WF2} 3-16 ${WF3} 3-16 > ${WLIST}
-		./${PROG1} -vct4 -f ${WLIST} > ${RESULTS}
+		./${PROG1} -vct4 -f ${WLIST} >> ${RESULTS}
 
 cleantest:
 		${RM} ${WLIST} ${RESULTS}
