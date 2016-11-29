@@ -25,6 +25,8 @@ CFLAGS		+= -finline-functions
 #CFLAGS		+= -mtune=native -march=native
 #CFLAGS		+= -g
 
+DEBUGFLAGS	+= -g -rdynamic
+
 CC		?= cc
 INSTALL		?= install -c -o root -g bin -m 755
 RM		?= /bin/rm -f
@@ -65,3 +67,5 @@ cleantest:
 
 cleanall:	clean cleantest
 
+debug: CFLAGS += ${DEBUGFLAGS}
+debug: all
