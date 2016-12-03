@@ -440,24 +440,24 @@ validkey(RSA *rsa)
 		*lambda = BN_CTX_get(ctx),	/* LCM(p - 1, q - 1) */
 		*tmp = BN_CTX_get(ctx);		/* temporary storage */
 #if OPENSSL_VERSION_NUMBER >= OPENSSL_VERSION_1_1
-	BIGNUM *n = BN_CTX_get(ctx),
-		   *e = BN_CTX_get(ctx),
-		   *d = BN_CTX_get(ctx);
-	BIGNUM *p = BN_CTX_get(ctx),
-		   *q = BN_CTX_get(ctx);
-	BIGNUM *dmp1 = BN_CTX_get(ctx),
-		   *dmq1 = BN_CTX_get(ctx),
-		   *iqmp = BN_CTX_get(ctx);
+	BIGNUM const *n = BN_CTX_get(ctx),
+		         *e = BN_CTX_get(ctx),
+		         *d = BN_CTX_get(ctx);
+	BIGNUM const *p = BN_CTX_get(ctx),
+		         *q = BN_CTX_get(ctx);
+	BIGNUM const *dmp1 = BN_CTX_get(ctx),
+		         *dmq1 = BN_CTX_get(ctx),
+		         *iqmp = BN_CTX_get(ctx);
 
-	RSA_get0_key(rsa, (const BIGNUM **)&n, (const BIGNUM **)&e, (const BIGNUM **)&d);
+	RSA_get0_key(rsa, &n, &e, &d);
 	if (e == NULL)
 		error("RSA_get0_key() failed!\n");
 
-	RSA_get0_factors(rsa, (const BIGNUM **)&p, (const BIGNUM **)&q);
+	RSA_get0_factors(rsa, &p, &q);
 	if (p == NULL || q == NULL)
 		error("RSA_get0_factors() failed!\n");
 
-	RSA_get0_crt_params(rsa, (const BIGNUM **)&dmp1, (const BIGNUM **)&dmq1, (const BIGNUM **)&iqmp);
+	RSA_get0_crt_params(rsa, &dmp1, &dmq1, &iqmp);
 	if (dmp1 == NULL || dmq1 == NULL)
 		error("RSA_get0_crt_params() failed!\n");
 
@@ -500,10 +500,21 @@ validkey(RSA *rsa)
 #endif
 
 #if OPENSSL_VERSION_NUMBER >= OPENSSL_VERSION_1_1
-	BN_mod_inverse(d, e, lambda, ctx);	/* d */
-	BN_mod(dmp1, d, p1, ctx);		/* d mod(p - 1) */
-	BN_mod(dmq1, d, q1, ctx);		/* d mod(q - 1) */
-	BN_mod_inverse(iqmp, q, p, ctx);	/* q ^ -1 mod p */
+	BIGNUM *new_d = BN_CTX_get(ctx),
+		   *new_dmp1 = BN_CTX_get(ctx),
+		   *new_dmq1 = BN_CTX_get(ctx),
+		   *new_iqmp = BN_CTX_get(ctx);
+
+	BN_mod_inverse(new_d, e, lambda, ctx);	/* d */
+	BN_mod(new_dmp1, d, p1, ctx);		/* d mod(p - 1) */
+	BN_mod(new_dmq1, d, q1, ctx);		/* d mod(q - 1) */
+	BN_mod_inverse(new_iqmp, q, p, ctx);	/* q ^ -1 mod p */
+
+	if (!RSA_set0_key(rsa, NULL, NULL, new_d))
+		error("RSA_set0_key() failed!\n");
+
+	if (!RSA_set0_crt_params(rsa, new_dmp1, new_dmq1, new_iqmp))
+		error("RSA_set0_crt_params() failed!\n");
 #else
 	BN_mod_inverse(rsa->d, rsa->e, lambda, ctx);	/* d */
 	BN_mod(rsa->dmp1, rsa->d, p1, ctx);		/* d mod(p - 1) */
