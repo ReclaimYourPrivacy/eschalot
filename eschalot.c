@@ -450,7 +450,7 @@ validkey(RSA *rsa)
 		         *iqmp = BN_CTX_get(ctx);
 
 	RSA_get0_key(rsa, &n, &e, &d);
-	if (e == NULL)
+	if (n == NULL || e == NULL || d == NULL)
 		error("RSA_get0_key() failed!\n");
 
 	RSA_get0_factors(rsa, &p, &q);
@@ -458,7 +458,7 @@ validkey(RSA *rsa)
 		error("RSA_get0_factors() failed!\n");
 
 	RSA_get0_crt_params(rsa, &dmp1, &dmq1, &iqmp);
-	if (dmp1 == NULL || dmq1 == NULL)
+	if (dmp1 == NULL || dmq1 == NULL || iqmp == NULL)
 		error("RSA_get0_crt_params() failed!\n");
 
 	BN_sub(p1, p, BN_value_one());	/* p - 1 */
@@ -500,14 +500,14 @@ validkey(RSA *rsa)
 #endif
 
 #if OPENSSL_VERSION_NUMBER >= OPENSSL_VERSION_1_1
-	BIGNUM *new_d = BN_CTX_get(ctx),
-		   *new_dmp1 = BN_CTX_get(ctx),
-		   *new_dmq1 = BN_CTX_get(ctx),
-		   *new_iqmp = BN_CTX_get(ctx);
+	BIGNUM *new_d = BN_new(),
+		   *new_dmp1 = BN_new(),
+		   *new_dmq1 = BN_new(),
+		   *new_iqmp = BN_new();
 
 	BN_mod_inverse(new_d, e, lambda, ctx);	/* d */
-	BN_mod(new_dmp1, d, p1, ctx);		/* d mod(p - 1) */
-	BN_mod(new_dmq1, d, q1, ctx);		/* d mod(q - 1) */
+	BN_mod(new_dmp1, new_d, p1, ctx);		/* d mod(p - 1) */
+	BN_mod(new_dmq1, new_d, q1, ctx);		/* d mod(q - 1) */
 	BN_mod_inverse(new_iqmp, q, p, ctx);	/* q ^ -1 mod p */
 
 	if (!RSA_set0_key(rsa, NULL, NULL, new_d))
