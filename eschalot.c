@@ -41,7 +41,7 @@
   #define le64toh(x) OSSwapLittleToHostInt64(x)
 #endif  /* __APPLE__ */
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__CYGWIN__)
 # define _GNU_SOURCE
 # include <endian.h>
 #endif
