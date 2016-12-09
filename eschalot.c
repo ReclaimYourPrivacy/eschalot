@@ -67,6 +67,7 @@
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
 #include <openssl/sha.h>
+#define OPENSSL_VERSION_1_1 0x10100000L
 
 /* Define NEED_HTOBE32 if htobe32() is not available on your platform. */
 /* #define NEED_HTOBE32 */
@@ -242,7 +243,7 @@ void *
 worker(void *arg)
 {
 	SHA_CTX		hash, copy;
-	RSA		*rsa;
+	RSA		*rsa = NULL;
 	uint8_t		*tmp, *der,
 			buf[SHA_DIGEST_LENGTH],
 			onion[ONION_LENP1],
@@ -251,15 +252,23 @@ worker(void *arg)
 	uint64_t	*counter;
 	/* Public exponent and the "big-endian" version of it */
 	unsigned int	e, e_be;
+	BIGNUM *big_e = BN_new();
+	BN_set_word(big_e, (unsigned long) RSA_E_START);
 
 	counter = (uint64_t *)arg;
 
 	while (!done) {
 		/* Generate a new RSA key every time e reaches RSA_E_LIMIT */
+#if OPENSSL_VERSION_NUMBER >= OPENSSL_VERSION_1_1
+		rsa = RSA_new();
+		if (!RSA_generate_key_ex(rsa, RSA_KEYS_BITLEN, big_e, NULL))
+			error("RSA Key Generation failed!\n");
+#else
 		rsa = RSA_generate_key(RSA_KEYS_BITLEN, RSA_E_START,
 		    NULL, NULL);
 		if (!rsa)
 			error("RSA Key Generation failed!\n");
+#endif
 		
 		/* Too chatty - disable. */
 		/* msg("Generated a new RSA key pair.\n"); */
@@ -277,6 +286,7 @@ worker(void *arg)
 		SHA1_Update(&hash, der, derlen - SIZE_OF_E);
 		free(der);
 		e = RSA_E_START - 2; /* public exponent */
+		BN_set_word(big_e, (unsigned long) e);
 
 		/* Main loop */
 		while  ((e < RSA_E_LIMIT) && !done) {
@@ -306,8 +316,17 @@ worker(void *arg)
 			if (search(buf, onion)) {
 				/* Found a possible key,
 				 * from here on down performance is not critical. */
+#if OPENSSL_VERSION_NUMBER >= OPENSSL_VERSION_1_1
+				BIGNUM *new_e;
+				new_e = BN_bin2bn((uint8_t *)&e_be, SIZE_OF_E, NULL);
+				if (new_e == NULL)
+					error("Failed to convert e to BIGNUM!\n");
+				if(!RSA_set0_key(rsa, NULL, new_e, NULL))
+					error("Failed to set e in RSA key!\n");
+#else
 				if (!BN_bin2bn((uint8_t *)&e_be, SIZE_OF_E, rsa->e))
 					error("Failed to set e in RSA key!\n");
+#endif
 				if (!validkey(rsa))
 					error("A bad key was found!\n");
 				if (pflag)
@@ -420,16 +439,45 @@ validkey(RSA *rsa)
 		*gcd = BN_CTX_get(ctx),		/* GCD(p - 1, q - 1) */
 		*lambda = BN_CTX_get(ctx),	/* LCM(p - 1, q - 1) */
 		*tmp = BN_CTX_get(ctx);		/* temporary storage */
+#if OPENSSL_VERSION_NUMBER >= OPENSSL_VERSION_1_1
+	BIGNUM const *n = BN_CTX_get(ctx),
+		         *e = BN_CTX_get(ctx),
+		         *d = BN_CTX_get(ctx);
+	BIGNUM const *p = BN_CTX_get(ctx),
+		         *q = BN_CTX_get(ctx);
+	BIGNUM const *dmp1 = BN_CTX_get(ctx),
+		         *dmq1 = BN_CTX_get(ctx),
+		         *iqmp = BN_CTX_get(ctx);
 
+	RSA_get0_key(rsa, &n, &e, &d);
+	if (n == NULL || e == NULL || d == NULL)
+		error("RSA_get0_key() failed!\n");
+
+	RSA_get0_factors(rsa, &p, &q);
+	if (p == NULL || q == NULL)
+		error("RSA_get0_factors() failed!\n");
+
+	RSA_get0_crt_params(rsa, &dmp1, &dmq1, &iqmp);
+	if (dmp1 == NULL || dmq1 == NULL || iqmp == NULL)
+		error("RSA_get0_crt_params() failed!\n");
+
+	BN_sub(p1, p, BN_value_one());	/* p - 1 */
+	BN_sub(q1, q, BN_value_one());	/* q - 1 */
+#else
 	BN_sub(p1, rsa->p, BN_value_one());	/* p - 1 */
 	BN_sub(q1, rsa->q, BN_value_one());	/* q - 1 */
+#endif
 	BN_gcd(gcd, p1, q1, ctx);	   	/* gcd(p - 1, q - 1) */
 
 	BN_div(tmp, NULL, p1, gcd, ctx);
 	BN_mul(lambda, q1, tmp, ctx);		/* lambda(n) */
 
 	/* Check if e is coprime to lambda(n). */
+#if OPENSSL_VERSION_NUMBER >= OPENSSL_VERSION_1_1
+	BN_gcd(tmp, lambda, e, ctx);
+#else
 	BN_gcd(tmp, lambda, rsa->e, ctx);
+#endif
 	if (!BN_is_one(tmp)) {
 		verbose("WARNING: Key check failed - e is coprime to lambda!\n");
 		return 0;
@@ -437,16 +485,42 @@ validkey(RSA *rsa)
 
 	/* Check if public exponent e is less than n - 1. */
 	/* Subtract n from e to avoid checking BN_is_zero. */
-	BN_sub(tmp, rsa->e, rsa->n);
-	if (!tmp->neg) {
+#if OPENSSL_VERSION_NUMBER >= OPENSSL_VERSION_1_1
+	BN_sub(tmp, n, BN_value_one());
+	if (BN_cmp(e, tmp) >= 0) {
 		verbose("WARNING: Key check failed - e is less than (n - 1)!\n");
 		return 0;
 	}
+#else
+	BN_sub(tmp, rsa->n, BN_value_one());
+	if (BN_cmp(rsa->e, tmp) >= 0) {
+		verbose("WARNING: Key check failed - e is less than (n - 1)!\n");
+		return 0;
+	}
+#endif
 
+#if OPENSSL_VERSION_NUMBER >= OPENSSL_VERSION_1_1
+	BIGNUM *new_d = BN_new(),
+		   *new_dmp1 = BN_new(),
+		   *new_dmq1 = BN_new(),
+		   *new_iqmp = BN_new();
+
+	BN_mod_inverse(new_d, e, lambda, ctx);	/* d */
+	BN_mod(new_dmp1, new_d, p1, ctx);		/* d mod(p - 1) */
+	BN_mod(new_dmq1, new_d, q1, ctx);		/* d mod(q - 1) */
+	BN_mod_inverse(new_iqmp, q, p, ctx);	/* q ^ -1 mod p */
+
+	if (!RSA_set0_key(rsa, NULL, NULL, new_d))
+		error("RSA_set0_key() failed!\n");
+
+	if (!RSA_set0_crt_params(rsa, new_dmp1, new_dmq1, new_iqmp))
+		error("RSA_set0_crt_params() failed!\n");
+#else
 	BN_mod_inverse(rsa->d, rsa->e, lambda, ctx);	/* d */
 	BN_mod(rsa->dmp1, rsa->d, p1, ctx);		/* d mod(p - 1) */
 	BN_mod(rsa->dmq1, rsa->d, q1, ctx);		/* d mod(q - 1) */
 	BN_mod_inverse(rsa->iqmp, rsa->q, rsa->p, ctx);	/* q ^ -1 mod p */
+#endif
 	BN_CTX_end(ctx);
 	BN_CTX_free(ctx);
 
