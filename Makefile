@@ -27,6 +27,14 @@ CFLAGS		+= -finline-functions
 
 DEBUGFLAGS	+= -g -rdynamic
 
+ifneq ($(OS),Windows_NT)
+    UNAME_S := $(shell uname -s)
+    ifeq ($(UNAME_S),Darwin)
+		LIBS += -L/usr/local/opt/openssl/lib
+		CFLAGS += -I/usr/local/opt/openssl/include
+    endif
+endif
+
 CC		?= cc
 INSTALL		?= install -c -o root -g bin -m 755
 RM		?= /bin/rm -f
