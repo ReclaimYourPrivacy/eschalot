@@ -144,6 +144,8 @@ unsigned int		minlen, maxlen, threads, prefixlen, wordcount;
 char			fn[FILENAME_MAX + 1], prefix[ONION_LENP1];
 regex_t			*regex;
 
+pthread_mutex_t printresult_lock;
+
 struct {
 	unsigned int	 count;
 	uint64_t	*branch;
@@ -155,6 +157,8 @@ main(int argc, char *argv[])
 	pthread_t	babies[MAX_THREADS];
 	uint64_t	count[MAX_THREADS];
 	unsigned int	i, j, dupcount = 0;
+
+	pthread_mutex_init(&printresult_lock, NULL);
 
 	/* Initialize global flags */
 	wordcount = done = cflag = fflag = nflag = pflag = rflag = vflag = 0;
@@ -359,8 +363,13 @@ worker(void *arg)
 					msg("Generating new RSA key.\n\n");
 					break;
 				} else
+				} else {
+					pthread_mutex_lock(&printresult_lock);
 					printresult(rsa, onion, onionfinal);
 				
+					pthread_mutex_unlock(&printresult_lock);
+				}
+
 				if (!cflag)
 					done = 1; /* Notify other threads. */
 				break;
@@ -625,6 +634,10 @@ printresult(RSA *rsa, uint8_t *target, uint8_t *actual)
 
 	BUF_MEM_free(buf);
 	free(dst);
+
+	if (cflag == 0) {
+		exit(0);
+	}
 }
 
 /* Generate .onion name from the RSA key. */
