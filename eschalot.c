@@ -362,7 +362,6 @@ worker(void *arg)
 					sleep(30);
 					msg("Generating new RSA key.\n\n");
 					break;
-				} else
 				} else {
 					pthread_mutex_lock(&printresult_lock);
 					printresult(rsa, onion, onionfinal);
