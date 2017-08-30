@@ -104,7 +104,7 @@ strnlen(const char *s, size_t ml)
 #define RSA_KEYS_BITLEN	1024			/* RSA key length to use */
 #define SIZE_OF_E	4			/* Limit public exponent to 4 bytes */
 #define RSA_E_START	0xFFFFFFu + 2		/* Min e */
-#define RSA_E_LIMIT	0xFFFFFFFFu		/* Max e */
+#define RSA_E_LIMIT	0x7FFFFFFFu		/* Max e */
 #define ONION_LENP1	17			/* Onion name length plus 1 */
 #define MAX_THREADS	100			/* Maximum number of threads */
 #define MAX_WORDS	0xFFFFFFFFu		/* Maximum words to read from file */
