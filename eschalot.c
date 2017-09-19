@@ -68,6 +68,7 @@
 #include <openssl/rsa.h>
 #include <openssl/sha.h>
 #define OPENSSL_VERSION_1_1 0x10100000L
+#define OPENSSL_VERSION_0_9_0_8 0x0090800FL
 
 /* Define NEED_HTOBE32 if htobe32() is not available on your platform. */
 /* #define NEED_HTOBE32 */
@@ -263,7 +264,7 @@ worker(void *arg)
 
 	while (!done) {
 		/* Generate a new RSA key every time e reaches RSA_E_LIMIT */
-#if OPENSSL_VERSION_NUMBER >= OPENSSL_VERSION_1_1
+#if OPENSSL_VERSION_NUMBER >= OPENSSL_VERSION_0_9_0_8
 		rsa = RSA_new();
 		if (!RSA_generate_key_ex(rsa, RSA_KEYS_BITLEN, big_e, NULL))
 			error("RSA Key Generation failed!\n");
