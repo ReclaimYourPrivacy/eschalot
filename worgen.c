@@ -78,7 +78,7 @@ main(int argc, char *argv[])
 			    w[j].minlen, w[j].maxlen, w[j].fn);
 
 		/* Basic sanity checks */
-		if (!w[j].fn || !w[j].minlen || !w[j].maxlen || w[j].maxlen > MAX_LEN)
+		if (!w[j].minlen || !w[j].maxlen || w[j].maxlen > MAX_LEN)
 			usage();
 	}
 
