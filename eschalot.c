@@ -105,7 +105,8 @@ strnlen(const char *s, size_t ml)
 #define RSA_KEYS_BITLEN	1024			/* RSA key length to use */
 #define SIZE_OF_E	4			/* Limit public exponent to 4 bytes */
 #define RSA_E_START	0xFFFFFFu + 2		/* Min e */
-#define RSA_E_LIMIT	0x7FFFFFFFu		/* Max e */
+#define RSA_E_LIMIT	0xFFFFFFFFu		/* Max e */
+#define ONION_LEN   16          /* Onion name length */
 #define ONION_LENP1	17			/* Onion name length plus 1 */
 #define MAX_THREADS	100			/* Maximum number of threads */
 #define MAX_WORDS	0xFFFFFFFFu		/* Maximum words to read from file */
@@ -127,6 +128,7 @@ static void		printresult(RSA *, uint8_t *, uint8_t *);
 static _Bool		fsearch(uint8_t *, uint8_t *);
 static _Bool		psearch(uint8_t *, uint8_t *);
 static _Bool		rsearch(uint8_t *, uint8_t *);
+static _Bool        zsearch(uint8_t *, uint8_t *);
 static _Bool		(*search)(uint8_t *, uint8_t *);
 static _Bool		validkey(RSA *);
 static signed int	compare(const void *, const void *);
@@ -141,7 +143,7 @@ static void		*worker(void *);
 /* Global variables */
 /* TODO: perhaps getting rid of so many globals is in order... */
 _Bool			done, cflag, fflag, nflag, pflag, rflag, vflag;
-unsigned int		minlen, maxlen, threads, prefixlen, wordcount;
+unsigned int		minlen, maxlen, threads, prefixlen, wordcount, zflag;
 char			fn[FILENAME_MAX + 1], prefix[ONION_LENP1];
 regex_t			*regex;
 
@@ -151,6 +153,10 @@ struct {
 	unsigned int	 count;
 	uint64_t	*branch;
 } tree[65536] = { {0, NULL} };
+
+struct dictree {
+	struct dictree *next[256];
+} dt = { {NULL} };
 
 int
 main(int argc, char *argv[])
@@ -162,7 +168,7 @@ main(int argc, char *argv[])
 	pthread_mutex_init(&printresult_lock, NULL);
 
 	/* Initialize global flags */
-	wordcount = done = cflag = fflag = nflag = pflag = rflag = vflag = 0;
+	wordcount = zflag = done = cflag = fflag = nflag = pflag = rflag = vflag = 0;
 	minlen = 8;
 	maxlen = 16;
 	threads = 1;
@@ -171,7 +177,7 @@ main(int argc, char *argv[])
 	
 	setoptions(argc, argv);
 
-	if (fflag) {
+	if (fflag && !zflag) {
 		readfile();
 		msg("Sorting the word hashes and removing duplicates.\n");
 		wordcount = 0;
@@ -193,6 +199,10 @@ main(int argc, char *argv[])
 			wordcount += tree[i].count;
 		}
 		msg("Final word count: %d.\n", wordcount);
+	}
+	else if (zflag) {
+		readfile();
+		msg("Final z-word count: %d.\n", wordcount);
 	}
 
 	/* Start our threads */
@@ -386,7 +396,7 @@ readfile(void)
 {
 	FILE		*file;
 	uint8_t		w[ONION_LENP1] = { 0 }, buf[10];
-	uint8_t		len, j;
+	uint8_t		len, l, j;
 	uint16_t	ind;
 	signed int	c;
 	uint64_t	wrd;
@@ -415,17 +425,35 @@ readfile(void)
 			/* Only pick the words of the length we need. */
 			len = strnlen((char *)w, ONION_LENP1);
 			if (len >= minlen && len <= maxlen && wordcount < MAX_WORDS) {
-				base32_dec(buf, w);
-				memset(w, 0, sizeof(w));
-				zerobits(&ind, &wrd, buf, len);
+				if (zflag) {
+					struct dictree *d = &dt;
+					c = 0;
+					for (l = 0; l < len+2; l++) {
+						if (d->next[c]) {
+							d = d->next[c];
+						}
+						else {
+							struct dictree *n = calloc(1, sizeof(struct dictree));
+							d->next[c] = n;
+							d = n;
+						}
+						c = w[l];
+					}
+					wordcount++;
+				}
+				else {
+					base32_dec(buf, w);
+					memset(w, 0, sizeof(w));
+					zerobits(&ind, &wrd, buf, len);
 
-				if ((tree[ind].branch = (uint64_t *)realloc(tree[ind].branch,
-				    sizeof(uint64_t) * (tree[ind].count + 1))) == NULL)
-					error("realloc() failed!\n");
+					if ((tree[ind].branch = (uint64_t *)realloc(tree[ind].branch,
+						sizeof(uint64_t) * (tree[ind].count + 1))) == NULL)
+						error("realloc() failed!\n");
 
-				tree[ind].branch[tree[ind].count] = wrd;
-				tree[ind].count++; 
-				wordcount++;
+					tree[ind].branch[tree[ind].count] = wrd;
+					tree[ind].count++; 
+					wordcount++;
+				}
 			}
 		}
 	}
@@ -716,6 +744,36 @@ psearch(__attribute__((unused)) uint8_t *buf, uint8_t *onion)
 	return !memcmp(onion, prefix, prefixlen);
 }
 
+/* Circular search. */
+_Bool
+zsearch(__attribute__((unused)) uint8_t *buf, uint8_t *onion)
+{
+	unsigned int i; int j;
+	struct dictree *ptrs[ONION_LENP1] = {NULL};
+	ptrs[0] = dt.next[0];
+	for (i = 0; i < zflag; i++) {
+		for (j = i; j >= 0; j--) {
+			if (ptrs[j]) {
+				struct dictree *th = ptrs[j];
+				ptrs[j] = NULL;
+			
+				if (th->next[0]) {
+					ptrs[0] = dt.next[0];
+				}
+			
+				if (th->next[onion[i]]) {
+					ptrs[j+1] = th->next[onion[i]];
+				}                
+			}
+		}
+	}
+        
+	for (i = 0; i <= zflag; i++) {
+		if (ptrs[i]) { return 1; }
+	}
+	return 0;
+}
+
 /* Zero unused bits, split 10 byte 'buffer' into 2 byte 'ind' and 8 byte 'word'. */
 /* TODO: currently doing '1' fill instead of zeroes - decide if it's final. */
 void
@@ -751,7 +809,7 @@ setoptions(int argc, char *argv[])
 {
 	int ch;
 
-	while ((ch = getopt(argc, argv, "cnvt:l:f:p:r:")) != -1)
+	while ((ch = getopt(argc, argv, "cnvt:l:f:z:p:r:")) != -1)
 		switch (ch) {
 		case 'c':
 			cflag = 1;
@@ -772,10 +830,10 @@ setoptions(int argc, char *argv[])
 			break;
 		case 'l':
 			minlen = strtoul(optarg, NULL, 0);
-			if (minlen < 8 || minlen > 16 || !strchr(optarg, '-'))
+			if (minlen < 1 || minlen > ONION_LEN || !strchr(optarg, '-'))
 				usage();
 			maxlen = strtoul(strchr(optarg, '-') + 1, NULL, 0);
-			if (maxlen < 8 || maxlen > 16 || minlen > maxlen)
+			if (maxlen < 1 || maxlen > ONION_LEN || minlen > maxlen)
 				usage();
 			break;
 		case 'f':
@@ -783,11 +841,17 @@ setoptions(int argc, char *argv[])
 			strncpy(fn, optarg, FILENAME_MAX);
 			search = fsearch;
 			break;
+		case 'z':
+			zflag = atoi(optarg);
+			if (zflag < 1 || zflag > ONION_LEN)
+				usage();
+			//search = zsearch;
+			break;
 		case 'p':
 			pflag = 1;
 			strncpy(prefix, optarg, ONION_LENP1);
 			minlen = maxlen = prefixlen = strnlen(prefix, ONION_LENP1);
-			if (prefixlen > 16 || prefixlen < 1)
+			if (prefixlen > ONION_LEN || prefixlen < 1)
 				usage();
 			for (unsigned int i = 0; i < prefixlen; i++) {
 				prefix[i] = tolower(prefix[i]);
@@ -816,10 +880,14 @@ setoptions(int argc, char *argv[])
 
 	if (fflag + rflag + pflag != 1)
 		usage();
+		
+	if (zflag)
+		search = zsearch;
 
 	msg("Verbose, ");
 	cflag ?	msg("continuous, ") : msg("single result, ");
 	nflag ?	msg("digits ok, ")  : msg("no digits, ");
+	zflag ? msg("circular, ")   : msg("");
 	msg("%d threads, prefixes %d-%d characters long.\n",
 	    threads, minlen, maxlen);
 }
@@ -832,21 +900,24 @@ usage(void)
 	    "Version: %s\n"
 	    "\n"
 	    "usage:\n"
-	    "%s [-c] [-v] [-t count] ([-n] [-l min-max] -f filename) | (-r regex) | (-p prefix)\n"
+	    "%s [-c] [-v] [-t count] ([-n] [-l min-max] [-z count] -f filename) | (-r regex) | (-p prefix)\n"
 	    "  -v         : verbose mode - print extra information to STDERR\n"
 	    "  -c         : continue searching after the hash is found\n"
 	    "  -t count   : number of threads to spawn default is one)\n"
 	    "  -l min-max : look for prefixes that are from 'min' to 'max' characters long\n"
 	    "  -n         : Allow digits to be part of the prefix (affects wordlist mode only)\n"
 	    "  -f filename: name of the text file with a list of prefixes\n"
+		"  -z count   : use circular search; search for prefixes of at least 'count' characters,\n"
+		"               composed from concatenated words provided in the wordlist (-f)\n"
 	    "  -p prefix  : single prefix to look for (1-16 characters long)\n"
 	    "  -r regex   : search for a POSIX-style regular expression\n"
 	    "\n"
 	    "Examples:\n"
 	    "  %s -cvt4 -l8-12 -f wordlist.txt >> results.txt\n"
 	    "  %s -v -r '^test|^exam'\n"
-	    "  %s -ct5 -p test\n\n",
-	    VERSION, __progname, __progname, __progname, __progname);
+	    "  %s -ct5 -p test\n"
+	    "  %s -cvt4 -l2-16 -z11 -f top1000.txt >> results.txt\n\n",
+	    VERSION, __progname, __progname, __progname, __progname, __progname);
 
 	fprintf(stderr,
 	    "  base32 alphabet allows letters [a-z] and digits [2-7]\n"

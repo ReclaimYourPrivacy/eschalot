@@ -160,6 +160,12 @@ redirecting the results to a file:
 
 	$ ./eschalot -vct6 -l8-10 -f wordlist.txt >> results.txt
 
+There's a new search mode yielding quite good results: circular mode. In this
+mode, the dictionary is loaded into memory and all possible concatenations
+are tried up to the value of the -z parameter.
+
+    $ ./eschalot -vct6 -l2-16 -z 11 -f top1000.txt >> results.txt
+
 
 
 Generating a wordlist:
