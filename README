@@ -1,17 +1,17 @@
 About:
 ------
 
-Eschalot is a TOR hidden service name generator, it allows one to produce
+Eschalot is a Tor hidden service name generator, it allows one to produce
 a (partially) customized vanity .onion address using a brute-force method.
 
-See http://torproject.org for more information about the TOR network
-and http://torproject.org/docs/hidden-services for the hidden services
+See https://torproject.org for more information about the Tor network
+and https://torproject.org/docs/hidden-services for the hidden services
 documentation.
 
 Why eschalot? Well, eschalot is a different name for shallot and it is
 a fork of an older .onion names generator called shallot.
 
-See http://github.com/katmagic/Shallot for information about the shallot
+See https://github.com/katmagic/Shallot for information about the shallot
 and also see the History section at the end of this document.
 
 Eschalot is distributed in source form under BSD license. It should compile
@@ -414,7 +414,7 @@ Initially I named my project "scallion", however, just a few days ago, I have
 learned of yet another .onion names generator recently released which was,
 unsurprisingly, named scallion, so I renamed my project to "eschalot".
 
-See http://github.com/lachesis/scallion for more details on scallion.
+See https://github.com/lachesis/scallion for more details on scallion.
 
 It's all about choices and now you have several!
 
