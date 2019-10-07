@@ -160,6 +160,12 @@ redirecting the results to a file:
 
 	$ ./eschalot -vct6 -l8-10 -f wordlist.txt >> results.txt
 
+If eschalot is running on a different machine than will host the onion
+service, then it is good to store the results in an encrypted file without
+hitting the disk in plain text.  That is easy to do by piping to gpg:
+
+        $ ./eschalot -vct3 -p test | gpg --trust-model always --encrypt \
+	    --recipient 0xfakefakefakefakefakefakefake > results.gpg
 
 
 Generating a wordlist:
