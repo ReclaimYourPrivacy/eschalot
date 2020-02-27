@@ -122,7 +122,7 @@ static void		(*msg)(char *, ...);
 /* User IO functions */
 static void		setoptions(int, char *[]);
 static void		readfile(void);
-static void		printresult(RSA *, uint8_t *, uint8_t *);
+static void		printresult(RSA *, uint8_t *, uint8_t *, uint64_t);
 /* Math and search functions */
 static _Bool		fsearch(uint8_t *, uint8_t *);
 static _Bool		psearch(uint8_t *, uint8_t *);
@@ -254,9 +254,9 @@ worker(void *arg)
 			onion[ONION_LENP1],
 			onionfinal[ONION_LENP1];
 	signed int	derlen;
-	uint64_t	*counter;
+	uint64_t	loops, *counter;
 	/* Public exponent and the "big-endian" version of it */
-	unsigned int	e, e_be;
+	unsigned int	i, e, e_be;
 	BIGNUM *big_e = BN_new();
 	BN_set_word(big_e, (unsigned long) RSA_E_START);
 
@@ -364,8 +364,15 @@ worker(void *arg)
 					msg("Generating new RSA key.\n\n");
 					break;
 				} else {
+
+					/* Collect our thread's counters for STDOUT */
+					loops = 0;
+					for(i = 0; i < threads; i++){
+						loops += counter[i];
+					};
+
 					pthread_mutex_lock(&printresult_lock);
-					printresult(rsa, onion, onionfinal);
+					printresult(rsa, onion, onionfinal, loops);
 				
 					pthread_mutex_unlock(&printresult_lock);
 				}
@@ -606,7 +613,7 @@ base32_dec (uint8_t *dst, uint8_t *src)
 
 /* Print found .onion name and PEM formatted RSA key. */
 void 
-printresult(RSA *rsa, uint8_t *target, uint8_t *actual)
+printresult(RSA *rsa, uint8_t *target, uint8_t *actual, uint64_t loops)
 {	
 	uint8_t		*dst;
 	BUF_MEM		*buf;
@@ -628,7 +635,9 @@ printresult(RSA *rsa, uint8_t *target, uint8_t *actual)
 	msg("Found a key for %s (%d) - %s.onion\n",
 	    target, strnlen((char *)target, ONION_LENP1), actual);
 	printf("----------------------------------------------------------------\n");
-	printf("%s.onion\n", actual);
+	printf("Found matching domain after "
+	    "%" PRIu64 " tries: %s.onion\n", loops, actual);
+	printf("----------------------------------------------------------------\n");
 	printf("%s\n", dst);
 	fflush(stdout);
 
