@@ -142,7 +142,7 @@ static void		*worker(void *);
 /* TODO: perhaps getting rid of so many globals is in order... */
 _Bool			done, cflag, fflag, nflag, pflag, rflag, vflag;
 unsigned int		minlen, maxlen, threads, prefixlen, wordcount;
-char			fn[FILENAME_MAX + 1], prefix[ONION_LENP1];
+char			fn[FILENAME_MAX + 1], prefix[ONION_LENP1 + 1];
 regex_t			*regex;
 
 pthread_mutex_t printresult_lock;
